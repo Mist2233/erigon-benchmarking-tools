@@ -109,10 +109,11 @@ def scan_blocks(
     end_block: int,
     max_traces: Optional[int] = None,
     show_progress: bool = True,
+    block_interval: int = 1,
 ) -> Iterable[TraceResult]:
     logging.info("Scanning blocks %s -> %s", start_block, end_block)
     traces_collected = 0
-    total_blocks = end_block - start_block + 1
+    total_blocks = len(range(start_block, end_block + 1, block_interval))
     
     # Progress bar setup
     if show_progress and HAS_TQDM:
@@ -138,22 +139,25 @@ def scan_blocks(
         if show_progress:
             print(f"📊 Collecting traces (target: {max_traces if max_traces else 'unlimited'})...")
 
-    for block_idx, block_num in enumerate(range(start_block, end_block + 1)):
+    for block_idx, block_num in enumerate(range(start_block, end_block + 1, block_interval)):
         try:
             block = w3.eth.get_block(block_num, full_transactions=True)
         except Exception as e:
             logging.warning("Failed to fetch block %s: %s", block_num, e)
-            if block_pbar:
+            if block_pbar is not None:
                 block_pbar.update(1)
             continue
 
         block_ts = block["timestamp"]
         for tx in block["transactions"]:
+            # 实现无差别攻击，而不是回放某些特定交易
+            # 如果想要回到特定交易部分，取消下面的注释即可。
             to_address = (tx.get("to") or "").lower()
-            if to_address not in LOWER_TARGETS:
-                continue
+            # if to_address not in LOWER_TARGETS:
+            #     continue
 
-            target_name = LOWER_TARGETS[to_address]
+            # target_name = LOWER_TARGETS[to_address]
+            target_name = LOWER_TARGETS.get(to_address, "Other Contract")
             tx_hash = Web3.to_hex(tx["hash"])
 
             try:
@@ -174,7 +178,7 @@ def scan_blocks(
                 len(counts),
             )
             
-            if pbar:
+            if pbar is not None:
                 pbar.update(1)
                 pbar.set_postfix_str(f"{target_name[:20]}")
 
@@ -191,18 +195,18 @@ def scan_blocks(
 
             if max_traces and traces_collected >= max_traces:
                 logging.info("Reached max_traces=%s, stopping", max_traces)
-                if pbar:
+                if pbar is not None:
                     pbar.close()
-                if block_pbar:
+                if block_pbar is not None:
                     block_pbar.close()
                 return
         
-        if block_pbar:
+        if block_pbar is not None:
             block_pbar.update(1)
     
-    if pbar:
+    if pbar is not None:
         pbar.close()
-    if block_pbar:
+    if block_pbar is not None:
         block_pbar.close()
 
 
@@ -235,6 +239,8 @@ def parse_args() -> argparse.Namespace:
                         help="Show detailed logs in console (slower)")
     parser.add_argument("--no-progress", action="store_true",
                         help="Disable progress bar")
+    parser.add_argument("--block-interval", type=int, default=1,
+                        help="Interval for sampling blocks (e.g., 100 means trace 1 block every 100).")
     return parser.parse_args()
 
 
@@ -270,7 +276,8 @@ def main() -> int:
         args.start_block, 
         args.end_block, 
         args.max_traces,
-        show_progress=not args.no_progress
+        show_progress=not args.no_progress,
+        block_interval=args.block_interval
     ))
 
     if not results:

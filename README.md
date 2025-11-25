@@ -9,6 +9,7 @@
 - **智能日志管理**：详细日志自动转存至 `logs/`，终端仅显示关键信息（支持 `--verbose` 开启详细输出）。
 - **结构化输出**：结果自动保存为 JSON 格式至 `results/` 目录，便于后续分析。
 - **灵活输入**：支持十进制（`23000000`）和十六进制（`0x16abb73`）区块号。
+- **跳跃式采样**：通过 `--block-interval` 按间隔采样区块，扩大时间跨度同时控制耗时。
 
 ## 🔧 安装与依赖
 
@@ -52,6 +53,21 @@ python3 router_trace_collector.py \
   --max-traces 500
 ```
 
+**采样重放（长时间跨度）:**
+
+在 10,000 个区块的范围内，每 100 个区块采 1 个样（用于压力测试缓存局部性）。
+
+```bash
+python3 router_trace_collector.py \
+  --rpc http://127.0.0.1:8545 \
+  --start-block 23780000 \
+  --end-block 23790000 \
+  --block-interval 100 \
+  --output sampled_10k_blocks.json
+```
+
+提示：区块范围为“包含尾区块”。当跨度正好为 10,000 且步长为 100 时，采样区块数为 101。如果你需要严格采样 100 个区块，请将 `--end-block` 设置为 `start_block + 9900`。
+
 **后台运行模式 (无进度条)：**
 
 适合使用 `nohup` 挂机运行大规模任务。
@@ -77,6 +93,7 @@ tail -f logs/trace.log
 | `--max-traces`  | `-m` | 收集达到此交易数量后停止         | 100                               |
 | `--verbose`     | `-v` | 在终端显示详细日志               | False                             |
 | `--no-progress` |      | 禁用进度条 (适合日志重定向)      | False                             |
+| `--block-interval` |      | 采样区块间隔（100 表示每 100 个区块采 1 个） | 1 |
 
 ## 📂 输出文件结构
 

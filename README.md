@@ -82,18 +82,54 @@ nohup python3 router_trace_collector.py \
 tail -f logs/trace.log
 ```
 
+### 方式 3：基准测试 (只测 RPC 延迟)
+
+当你想要度量 Erigon 本身的处理速度（去除 Python/脚本开销与启动成本）时，使用 `benchmark_replay.py` 可以精确统计 RPC 请求的纯延迟（服务器处理时间的近似值）。仓库同时提供了 `quick_benchmark.sh` 做为便捷包装，模仿 `quick_replay.sh` 的使用体验。
+
+先确保安装依赖：
+```bash
+pip3 install -r requirements.txt
+```
+
+快速运行（从当前区块开始，回放最近 100 个区块，每块请求 1 次）：
+```bash
+chmod +x quick_benchmark.sh
+./quick_benchmark.sh
+```
+
+示例：对单个区块重复多次以降低波动：
+```bash
+# 单区块（十六进制 0xF42400 = 16000000），重复 10 次
+python3 benchmark_replay.py --rpc http://127.0.0.1:8545 --start-block 0xF42400 --end-block 0xF42400 --repeat 10
+
+# 或使用快速脚本从当前区块向前回放 500 个区块，每块重复 5 次
+./quick_benchmark.sh 500 5
+```
+
+脚本输出包含：
+- `Total RPC Time`：对所有 `session.post()` 调用累计的纯 RPC 耗时（秒）。
+- `Average Latency`：每次 RPC 的平均延迟（毫秒）。
+- `Throughput (TPS)`：基于纯 RPC 时间的吞吐（请求/秒）。
+
+注意事项：
+- 脚本使用 `requests.Session()` 保持 TCP 连接以消除握手开销；在版本对比时请在同一台机器上运行并在切换版本后重启节点以保证环境一致。
+- 推荐将 `--repeat` 设置为 5~20，以减少单次请求波动带来的噪声；也可以对多个区块采样多次然后统计平均值与标准差。
+
+- 进度条：脚本使用 `tqdm` 显示请求进度（默认开启），可通过 `--no-progress` 关闭进度条显示。
+
+
 ## ⚙️ 参数说明
 
-| 参数            | 缩写 | 说明                             | 默认值                            |
-| --------------- | ---- | -------------------------------- | --------------------------------- |
-| `--rpc`         |      | Erigon 节点的 RPC 地址           | `http://127.0.0.1:8545`           |
-| `--start-block` |      | 开始区块高度 (支持 hex/dec)      | 最新区块 - 1000                   |
-| `--end-block`   |      | 结束区块高度 (支持 hex/dec)      | 最新区块                          |
-| `--output`      | `-o` | 结果文件名 (自动存入 `results/`) | `router_opcodes_{timestamp}.json` |
-| `--max-traces`  | `-m` | 收集达到此交易数量后停止         | 100                               |
-| `--verbose`     | `-v` | 在终端显示详细日志               | False                             |
-| `--no-progress` |      | 禁用进度条 (适合日志重定向)      | False                             |
-| `--block-interval` |      | 采样区块间隔（100 表示每 100 个区块采 1 个） | 1 |
+| 参数               | 缩写 | 说明                                         | 默认值                            |
+| ------------------ | ---- | -------------------------------------------- | --------------------------------- |
+| `--rpc`            |      | Erigon 节点的 RPC 地址                       | `http://127.0.0.1:8545`           |
+| `--start-block`    |      | 开始区块高度 (支持 hex/dec)                  | 最新区块 - 1000                   |
+| `--end-block`      |      | 结束区块高度 (支持 hex/dec)                  | 最新区块                          |
+| `--output`         | `-o` | 结果文件名 (自动存入 `results/`)             | `router_opcodes_{timestamp}.json` |
+| `--max-traces`     | `-m` | 收集达到此交易数量后停止                     | 100                               |
+| `--verbose`        | `-v` | 在终端显示详细日志                           | False                             |
+| `--no-progress`    |      | 禁用进度条 (适合日志重定向)                  | False                             |
+| `--block-interval` |      | 采样区块间隔（100 表示每 100 个区块采 1 个） | 1                                 |
 
 ## 📂 输出文件结构
 
